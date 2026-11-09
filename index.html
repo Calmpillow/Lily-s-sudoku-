@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f8e8ed">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<title>Quiet Sudoku</title>
+<style>
+:root{
+  --bg:#f8e8ed;--panel:rgba(255,250,251,.94);--panel2:#fff1f4;
+  --ink:#493640;--muted:#987d89;--accent:#c66f91;--line:#e7c8d3;
+  --fixed:#503b46;--selected:#f0b8cb;--related:#f9e2e9;
+  --same:#f4ccda;--bad:#b43f58;--good:#8c6475;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;min-height:100vh;display:flex;justify-content:center;
+  padding:24px 12px 30px;color:var(--ink);
+  font-family:system-ui,-apple-system,"Segoe UI",sans-serif;
+  background:
+    radial-gradient(ellipse at 12% 10%,rgba(255,255,255,.9),transparent 32%),
+    radial-gradient(ellipse at 88% 24%,rgba(255,255,255,.72),transparent 28%),
+    linear-gradient(145deg,#f9e9ee 0%,#f4dce5 48%,#fbeff1 100%);
+  overflow-x:hidden;
+}
+#petals{position:fixed;inset:0;overflow:hidden;pointer-events:none;z-index:0}
+.petal{
+  position:absolute;top:-35px;width:13px;height:18px;
+  border-radius:80% 10% 80% 10%;background:rgba(231,151,178,.58);
+  transform:rotate(35deg);animation:fall linear infinite;
+  filter:drop-shadow(0 1px 2px rgba(145,83,105,.12));
+}
+.petal:nth-child(3n){background:rgba(255,220,231,.9);width:10px;height:14px}
+.petal:nth-child(4n){background:rgba(211,126,158,.48);width:15px;height:19px}
+@keyframes fall{
+  0%{transform:translate3d(0,-5vh,0) rotate(0deg)}
+  50%{transform:translate3d(45px,52vh,0) rotate(180deg)}
+  100%{transform:translate3d(-25px,108vh,0) rotate(360deg)}
+}
+main{position:relative;z-index:1;width:min(100%,520px)}
+header{text-align:center;margin-bottom:18px}
+h1{font-family:Georgia,serif;font-size:29px;letter-spacing:.09em;margin:0 0 5px;color:#684657}
+.sub{color:var(--muted);font-size:13px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:16px 0}
+.stat,.gamepanel{
+  background:var(--panel);border:1px solid rgba(218,173,190,.75);
+  border-radius:16px;box-shadow:0 8px 24px rgba(132,83,103,.08);
+  backdrop-filter:blur(8px)
+}
+.stat{padding:10px;text-align:center}
+.stat span{display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.08em}
+.stat strong{font-size:18px;color:#70495b}
+.gamepanel{padding:13px}
+.topline{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:0 2px 11px;font-size:13px;color:var(--muted)}
+#status{color:var(--good);font-weight:650}
+#board{
+  display:grid;grid-template-columns:repeat(9,1fr);aspect-ratio:1;
+  border:2px solid #bd8da1;border-radius:7px;overflow:hidden;
+  background:#fff9fb;touch-action:manipulation
+}
+.cell{
+  border:0;border-right:1px solid #e3c6d1;border-bottom:1px solid #e3c6d1;
+  background:#fff9fb;color:#5a4350;font-size:clamp(17px,5vw,25px);
+  font-weight:500;padding:0;display:grid;place-items:center;min-width:0;position:relative
+}
+.cell:nth-child(3n){border-right:2px solid #bd8da1}
+.cell:nth-child(9n){border-right:0}
+.cell:nth-child(n+19):nth-child(-n+27),.cell:nth-child(n+46):nth-child(-n+54){border-bottom:2px solid #bd8da1}
+.cell:nth-child(n+73){border-bottom:0}
+.cell.fixed{font-weight:750;color:#49323f}
+.cell.related{background:#f9e8ee}
+.cell.same{background:#f3d0dd}
+.cell.selected{background:#edb4c9!important;color:#542d40}
+.cell.error{color:var(--bad);background:#ffe0e5!important}
+.cell:focus-visible{outline:3px solid #b65d80;outline-offset:-3px;z-index:2}
+.controls{display:grid;grid-template-columns:repeat(9,1fr);gap:6px;margin:13px 0 10px}
+.digit{
+  background:#f7e3ea;border:1px solid #e4bdcc;color:#70495b;border-radius:10px;
+  padding:10px 0;font-size:18px;font-weight:700
+}
+.digit:active,.action:active{transform:scale(.97);filter:brightness(.97)}
+.actions{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:7px}
+.action{
+  border:1px solid #dfbdca;border-radius:10px;background:#fff3f6;color:#70495b;
+  padding:11px 3px;font-size:12px;font-weight:650;white-space:nowrap
+}
+.action.primary{background:#c66f91;color:white;border-color:#c66f91}
+.action:disabled{opacity:.42;cursor:not-allowed}
+.help{font-size:12px;color:var(--muted);line-height:1.55;text-align:center;margin:12px 4px 0}
+.message{min-height:20px;text-align:center;color:#986078;font-size:13px;margin-top:9px}
+footer{text-align:center;color:#a18491;font-size:11px;margin:15px 0}
+@media(max-width:380px){
+  body{padding:16px 8px 24px}
+  .gamepanel{padding:9px}
+  .actions{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .action{font-size:12px}
+}
+@media(min-width:480px){body{padding-top:32px}.gamepanel{padding:16px}.cell{font-size:25px}}
+@media(prefers-reduced-motion:reduce){.petal{animation:none;display:none}}
+</style>
+</head>
+<body>
+<div id="petals" aria-hidden="true"></div>
+<main>
+<header><h1>QUIET SUDOKU</h1><div class="sub">A little space to think. Just you and the puzzle.</div></header>
+<div class="playerbar">
+  <span>Playing as <strong id="playerName">Guest</strong></span>
+  <button class="action" id="switchPlayer" type="button">Switch player</button>
+</div>
+<div class="stats">
+  <div class="stat"><span>Level</span><strong id="level">1</strong></div>
+  <div class="stat"><span>Hints left</span><strong id="hints">3</strong></div>
+  <div class="stat"><span>Completed</span><strong id="completed">0</strong></div>
+</div>
+<section class="gamepanel">
+  <div class="topline"><span id="difficulty">Difficulty: Gentle</span><span id="status">In progress</span></div>
+  <div id="board" role="grid" aria-label="Sudoku board"></div>
+  <div class="controls" id="digits" aria-label="Choose a digit"></div>
+  <div class="actions">
+    <button class="action" id="undo" type="button" title="Undo the last move">↶ Undo</button>
+    <button class="action" id="redo" type="button" title="Redo an undone move">↷ Redo</button>
+    <button class="action" id="erase" type="button">Erase</button>
+    <button class="action" id="hint" type="button">Hint ✦</button>
+    <button class="action primary" id="check" type="button">Check</button>
+  </div>
+  <div class="message" id="message" aria-live="polite"></div>
+</section>
+<p class="help">Select a square, then choose a number. Use Undo to reverse a move and Redo to restore it. On a keyboard, press 1–9 to enter a number, Backspace or Delete to erase, and the arrow keys to move.</p>
+<footer>Each player has a separate save on this device and browser. No ads. No accounts. No purchases.</footer>
+</main>
+<div id="profileScreen" class="profile-screen" role="dialog" aria-modal="true" aria-labelledby="profileTitle">
+  <section class="profile-card">
+    <h2 id="profileTitle">Welcome to Quiet Sudoku</h2>
+    <p id="profileIntro">Choose your player profile or create a new one to begin.</p>
+    <label for="username">Your username</label>
+    <input id="username" maxlength="18" autocomplete="nickname" placeholder="Enter a username">
+    <button class="action primary profile-main" id="createProfile" type="button">Create new player</button>
+    <div id="savedProfiles" class="saved-profiles"></div>
+    <p class="profile-note">Profiles are saved in this browser on this device. They do not automatically sync to other devices.</p>
+    <div id="profileMessage" class="profile-message" aria-live="polite"></div>
+  </section>
+</div>
+<style>
+.playerbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 10px;padding:9px 12px;background:var(--panel);border:1px solid var(--line);border-radius:12px;color:var(--muted);font-size:13px}
+.playerbar strong{color:#70495b}
+.profile-screen{position:fixed;inset:0;z-index:5;background:rgba(65,39,51,.42);display:none;align-items:center;justify-content:center;padding:18px;backdrop-filter:blur(5px)}
+.profile-screen.open{display:flex}
+.profile-card{width:min(100%,390px);background:#fff8fa;border:1px solid #e4bdcc;border-radius:20px;padding:22px;box-shadow:0 18px 60px rgba(80,43,60,.22)}
+.profile-card h2{font-family:Georgia,serif;color:#684657;margin:0 0 8px;font-size:24px}
+.profile-card p{color:var(--muted);font-size:13px;line-height:1.5}
+.profile-card label{display:block;color:#70495b;font-size:12px;font-weight:700;margin:16px 0 6px}
+.profile-card input{width:100%;padding:12px;border:1px solid #dfbdca;border-radius:10px;background:white;color:var(--ink);font:inherit;outline-color:#c66f91}
+.profile-main{width:100%;margin-top:10px;padding:12px}
+.saved-profiles{display:grid;gap:7px;margin-top:12px}
+.profile-choice{border:1px solid #e4bdcc;border-radius:10px;background:#fff1f4;padding:10px;text-align:left;color:#70495b;font-weight:650}
+.profile-note{font-size:11px!important;margin:14px 0 0}
+.profile-message{color:#a34865;font-size:12px;min-height:18px;margin-top:8px}
+</style>
+</main>
+<script>
+(() => {
+'use strict';
+const PROFILE_LIST_KEY='quietSudokuProfiles_v1';
+let activeProfile=null;
+const saveKey=()=> 'quietSudokuSave_v1_'+activeProfile;
+const $=id=>document.getElementById(id);
+let state={level:1,completed:0,puzzle:null,solution:null,values:null,givens:null,hints:3,selected:40,won:false};
+let undoStack=[],redoStack=[];
+const copy=b=>b.slice();
+function snapshot(){return {values:copy(state.values),hints:state.hints,selected:state.selected,won:state.won,completed:state.completed};}
+function restore(s){state.values=copy(s.values);state.hints=s.hints;state.selected=s.selected;state.won=s.won;state.completed=s.completed;}
+function recordMove(){
+  undoStack.push(snapshot());
+  if(undoStack.length>200)undoStack.shift();
+  redoStack=[];
+}
+function undo(){
+  if(!undoStack.length)return;
+  redoStack.push(snapshot());restore(undoStack.pop());$('message').textContent='Last move undone.';
+  save();render();
+}
+function redo(){
+  if(!redoStack.length)return;
+  undoStack.push(snapshot());restore(redoStack.pop());$('message').textContent='Move restored.';
+  save();render();
+}
+function shuffle(a){for(let i=a.length-1;i>0;i--){let j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+function candidates(b,i){let r=Math.floor(i/9),c=i%9,s=new Set();for(let k=0;k<9;k++){s.add(b[r*9+k]);s.add(b[k*9+c]);s.add(b[Math.floor(r/3)*27+Math.floor(c/3)*3+Math.floor(k/3)*9+k%3]);}let out=[];for(let n=1;n<=9;n++)if(!s.has(n))out.push(n);return out;}
+function solve(b,limit=2,randomize=false){
+ let count=0,first=null;
+ function rec(){
+  let best=-1,opts=null,min=10;
+  for(let i=0;i<81;i++)if(!b[i]){let o=candidates(b,i);if(!o.length)return;if(o.length<min){min=o.length;best=i;opts=o;if(min===1)break;}}
+  if(best===-1){count++;if(!first)first=copy(b);return count>=limit;}
+  if(randomize)shuffle(opts);
+  for(const n of opts){b[best]=n;if(rec())return true;b[best]=0;}
+  return false;
+ }
+ rec();return {count,solution:first};
+}
+function makeSolution(){let b=Array(81).fill(0);solve(b,1,true);return b;}
+function countSolutions(b){return solve(copy(b),2,false).count;}
+function blanksForLevel(level){
+ const steps=Math.floor((level-1)/10),difficultyScore=Math.pow(1.01,steps);
+ const maximumScore=Math.pow(1.01,19999),fraction=Math.min(1,Math.log(difficultyScore)/Math.log(maximumScore));
+ return Math.round(38+20*fraction);
+}
+function difficultyName(blanks){return blanks<42?'Gentle':blanks<47?'Easy':blanks<52?'Steady':blanks<56?'Tricky':'Expert';}
+function generate(level){
+ const solution=makeSolution(),puzzle=copy(solution),target=blanksForLevel(level);
+ const order=shuffle(Array.from({length:81},(_,i)=>i));let removed=0;
+ for(const i of order){if(removed>=target)break;const old=puzzle[i];puzzle[i]=0;if(countSolutions(puzzle)!==1)puzzle[i]=old;else removed++;}
+ return {solution,puzzle};
+}
+function save(){
+ if(!activeProfile)return;
+ try{localStorage.setItem(saveKey(),JSON.stringify({...state,undoStack,redoStack}));}
+ catch(e){$('message').textContent='Could not save in this browser. Keep this tab open.';}
+}
+function loadProfile(profileId){
+ activeProfile=profileId;
+ try{
+  const s=JSON.parse(localStorage.getItem(saveKey()));
+  if(s&&s.puzzle?.length===81&&s.values?.length===81&&s.solution?.length===81){
+   state={...state,...s};undoStack=Array.isArray(s.undoStack)?s.undoStack:[];redoStack=Array.isArray(s.redoStack)?s.redoStack:[];return true;
+  }
+ }catch(e){}
+ return false;
+}
+function getProfiles(){
+ try{return JSON.parse(localStorage.getItem(PROFILE_LIST_KEY))||[];}catch(e){return [];}
+}
+function putProfiles(profiles){localStorage.setItem(PROFILE_LIST_KEY,JSON.stringify(profiles));}
+function openProfileScreen(){
+ const profiles=getProfiles();
+ $('profileScreen').classList.add('open');
+ $('username').value='';
+ $('profileMessage').textContent='';
+ $('savedProfiles').innerHTML='';
+ $('profileIntro').textContent=profiles.length
+  ?'Welcome back! Choose your profile or create a new player.'
+  :'Create your username to start your own fresh Sudoku journey.';
+ profiles.forEach(profile=>{
+  const b=document.createElement('button');b.type='button';b.className='profile-choice';
+  b.textContent='Continue as '+profile.name;
+  b.addEventListener('click',()=>chooseProfile(profile.id));
+  $('savedProfiles').appendChild(b);
+ });
+ $('username').focus();
+}
+function chooseProfile(id){
+ const profiles=getProfiles(),profile=profiles.find(p=>p.id===id);
+ if(!profile)return;
+ activeProfile=id;
+ $('playerName').textContent=profile.name;
+ const hadSave=loadProfile(id);
+ $('profileScreen').classList.remove('open');
+ if(!hadSave)newPuzzle();else render();
+}
+function createProfile(){
+ const name=$('username').value.trim().replace(/\\s+/g,' ');
+ if(!name){$('profileMessage').textContent='Please enter a username first.';return;}
+ if(name.length>18){$('profileMessage').textContent='Usernames can be up to 18 characters.';return;}
+ const profiles=getProfiles();
+ if(profiles.some(p=>p.name.toLowerCase()===name.toLowerCase())){
+  $('profileMessage').textContent='That username is already used on this browser. Choose it below to continue, or pick another name.';return;
+ }
+ const id='player_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,7);
+ profiles.push({id,name});putProfiles(profiles);
+ chooseProfile(id);
+}
+function newPuzzle(){
+ const g=generate(state.level);state.puzzle=g.puzzle;state.solution=g.solution;
+ state.values=copy(g.puzzle);state.givens=g.puzzle.map(Boolean);state.hints=3;
+ state.selected=state.puzzle.findIndex(v=>!v);state.won=false;undoStack=[];redoStack=[];
+ $('message').textContent='';save();render();
+}
+function render(){
+ $('level').textContent=state.level.toLocaleString();$('hints').textContent=state.hints;
+ $('completed').textContent=state.completed.toLocaleString();
+ const blanks=blanksForLevel(state.level);
+ $('difficulty').textContent='Difficulty: '+difficultyName(blanks);
+ $('status').textContent=state.won?'Completed':'In progress';
+ $('check').textContent=state.won?'Next level':'Check';
+ $('undo').disabled=!undoStack.length;$('redo').disabled=!redoStack.length;
+ const board=$('board');board.innerHTML='';
+ for(let i=0;i<81;i++){
+  const b=document.createElement('button');b.className='cell';b.type='button';b.setAttribute('role','gridcell');
+  b.setAttribute('aria-label',`Row ${Math.floor(i/9)+1}, column ${i%9+1}, ${state.values[i]||'empty'}`);
+  if(state.givens[i])b.classList.add('fixed');
+  if(state.selected>=0){
+   const sr=Math.floor(state.selected/9),sc=state.selected%9,r=Math.floor(i/9),c=i%9;
+   if(r===sr||c===sc||(Math.floor(r/3)===Math.floor(sr/3)&&Math.floor(c/3)===Math.floor(sc/3)))b.classList.add('related');
+   if(state.values[i]&&state.values[i]===state.values[state.selected])b.classList.add('same');
+   if(i===state.selected)b.classList.add('selected');
+  }
+  b.textContent=state.values[i]||'';b.disabled=state.won||state.givens[i];
+  b.addEventListener('click',()=>{state.selected=i;render();});board.appendChild(b);
+ }
+ const digits=$('digits');digits.innerHTML='';
+ for(let n=1;n<=9;n++){const b=document.createElement('button');b.className='digit';b.type='button';b.textContent=n;b.addEventListener('click',()=>enter(n));digits.appendChild(b);}
+}
+function enter(n){
+ const i=state.selected;if(i<0||state.won||state.givens[i]||state.values[i]===n)return;
+ recordMove();state.values[i]=n;$('message').textContent='';save();render();
+ if(state.values.every(Boolean))check();
+}
+function erase(){
+ const i=state.selected;if(i<0||state.won||state.givens[i]||!state.values[i])return;
+ recordMove();state.values[i]=0;$('message').textContent='';save();render();
+}
+function check(){
+ if(state.won){nextLevel();return;}
+ if(state.values.some(v=>!v)){$('message').textContent='A few squares are still empty.';return;}
+ if(state.values.every((v,i)=>v===state.solution[i])){
+  recordMove();state.won=true;state.completed++;
+  $('message').textContent='Beautifully done. Your next level is ready!';
+  save();render();
+ }else{
+  $('message').textContent='Not quite yet. Look for a row, column or box conflict.';
+  const cells=[...document.querySelectorAll('.cell')];
+  cells.forEach((el,i)=>{if(!state.givens[i]&&state.values[i]!==state.solution[i])el.classList.add('error');});
+ }
+}
+function nextLevel(){state.level=Math.min(200000,state.level+1);newPuzzle();}
+function hint(){
+ if(state.won||state.hints<=0){$('message').textContent=state.hints<=0?'No hints left for this puzzle.':'Start the next level first.';return;}
+ let i=state.selected;
+ if(i<0||state.givens[i]||state.values[i])i=state.values.findIndex((v,j)=>!v&&!state.givens[j]);
+ if(i<0)return;
+ recordMove();state.selected=i;state.values[i]=state.solution[i];state.hints--;
+ save();render();$('message').textContent='One square revealed. Use your hints wisely!';
+ if(state.values.every(Boolean))check();
+}
+$('undo').addEventListener('click',undo);$('redo').addEventListener('click',redo);
+$('erase').addEventListener('click',erase);$('hint').addEventListener('click',hint);$('check').addEventListener('click',check);
+document.addEventListener('keydown',e=>{
+ if(/^[1-9]$/.test(e.key)){enter(Number(e.key));}
+ else if(e.key==='Backspace'||e.key==='Delete'){erase();}
+ else if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)){
+  e.preventDefault();let i=state.selected<0?0:state.selected;
+  const d={ArrowUp:-9,ArrowDown:9,ArrowLeft:-1,ArrowRight:1}[e.key];
+  state.selected=Math.max(0,Math.min(80,i+d));render();
+ }
+});
+function makePetals(){
+ const layer=$('petals');
+ for(let i=0;i<22;i++){
+  const p=document.createElement('span');p.className='petal';
+  p.style.left=(Math.random()*100)+'%';
+  p.style.animationDuration=(12+Math.random()*15)+'s';
+  p.style.animationDelay=(-Math.random()*24)+'s';
+  p.style.opacity=(.35+Math.random()*.55).toFixed(2);
+  layer.appendChild(p);
+ }
+}
+makePetals();
+$('switchPlayer').addEventListener('click',openProfileScreen);
+$('createProfile').addEventListener('click',createProfile);
+$('username').addEventListener('keydown',e=>{if(e.key==='Enter')createProfile();});
+if('serviceWorker' in navigator&&location.protocol.startsWith('http')){
+ window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
+}
+openProfileScreen();
+})();
+</script>
+</body>
+</html>
